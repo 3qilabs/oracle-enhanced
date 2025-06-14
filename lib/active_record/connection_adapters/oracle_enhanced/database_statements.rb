@@ -12,7 +12,7 @@ module ActiveRecord
         def execute(sql, name = nil, async: false, allow_retry: false)
           sql = transform_query(sql)
 
-          log(sql, name, async: async) { _connection.exec(sql, allow_retry: allow_retry) }
+          log(sql, name, async: async) { _connection.exec(sql) }
         end
 
         def exec_query(sql, name = "SQL", binds = [], prepare: false, async: false, allow_retry: false)
