@@ -65,7 +65,8 @@ require "active_record/type/oracle_enhanced/character_string"
 module ActiveRecord
   module ConnectionHandling # :nodoc:
     # Establishes a connection to the database that's used by all Active Record objects.
-    def oracle_enhanced_connection(config) # :nodoc:
+    def oracle_enhanced_connection(config)
+      # :nodoc:
       if config[:emulate_oracle_adapter] == true
         # allows the enhanced adapter to look like the OracleAdapter. Useful to pick up
         # conditionals in the rails activerecord test suite
@@ -241,12 +242,14 @@ module ActiveRecord
 
       class StatementPool < ConnectionAdapters::StatementPool
         private
-          def dealloc(stmt)
-            stmt.close
-          end
+
+        def dealloc(stmt)
+          stmt.close
+        end
       end
 
-      def initialize(config_or_deprecated_connection, deprecated_logger = nil, deprecated_connection_options = nil, deprecated_config = nil) # :nodoc:
+      def initialize(config_or_deprecated_connection, deprecated_logger = nil, deprecated_connection_options = nil, deprecated_config = nil)
+        # :nodoc:
         super(config_or_deprecated_connection, deprecated_logger, deprecated_connection_options, deprecated_config)
 
         @raw_connection = ConnectionAdapters::OracleEnhanced::Connection.create(@config)
@@ -277,7 +280,8 @@ module ActiveRecord
         end
       end
 
-      def return_value_after_insert?(column) # :nodoc:
+      def return_value_after_insert?(column)
+        # :nodoc:
         # TODO: Return true if there this column will be populated (e.g by a sequence)
         super
       end
@@ -438,7 +442,8 @@ module ActiveRecord
       attr_reader :auto_retry # :nodoc:
       @auto_retry = false
 
-      def auto_retry=(value) # :nodoc:
+      def auto_retry=(value)
+        # :nodoc:
         @auto_retry = value
         _connection.auto_retry = value if _connection
       end
@@ -523,7 +528,8 @@ module ActiveRecord
         !do_not_prefetch
       end
 
-      def reset_pk_sequence!(table_name, primary_key = nil, sequence_name = nil) # :nodoc:
+      def reset_pk_sequence!(table_name, primary_key = nil, sequence_name = nil)
+        # :nodoc:
         return nil unless data_source_exists?(table_name)
         unless primary_key && sequence_name
           # *Note*: Only primary key is implemented - sequence will be nil.
@@ -617,7 +623,8 @@ module ActiveRecord
 
       # Find a table's primary key and sequence.
       # *Note*: Only primary key is implemented - sequence will be nil.
-      def pk_and_sequence_for(table_name, owner = nil, desc_table_name = nil) # :nodoc:
+      def pk_and_sequence_for(table_name, owner = nil, desc_table_name = nil)
+        # :nodoc:
         (owner, desc_table_name) = _connection.describe(table_name)
 
         seqs = select_values_forcing_binds(<<~SQL.squish, "SCHEMA", [bind_string("owner", owner), bind_string("sequence_name", default_sequence_name(desc_table_name))])
@@ -655,11 +662,13 @@ module ActiveRecord
         pk_and_sequence && pk_and_sequence.first
       end
 
-      def has_primary_key?(table_name, owner = nil, desc_table_name = nil) # :nodoc:
+      def has_primary_key?(table_name, owner = nil, desc_table_name = nil)
+        # :nodoc:
         !pk_and_sequence_for(table_name, owner, desc_table_name).nil?
       end
 
-      def primary_keys(table_name) # :nodoc:
+      def primary_keys(table_name)
+        # :nodoc:
         (_owner, desc_table_name) = _connection.describe(table_name)
 
         pks = select_values_forcing_binds(<<~SQL.squish, "SCHEMA", [bind_string("table_name", desc_table_name)])
@@ -675,23 +684,25 @@ module ActiveRecord
         pks.map { |pk| oracle_downcase(pk) }
       end
 
-      def columns_for_distinct(columns, orders) # :nodoc:
+      def columns_for_distinct(columns, orders)
+        # :nodoc:
         # construct a valid columns name for DISTINCT clause,
         # ie. one that includes the ORDER BY columns, using FIRST_VALUE such that
         # the inclusion of these columns doesn't invalidate the DISTINCT
         #
         # It does not construct DISTINCT clause. Just return column names for distinct.
         order_columns = orders.reject(&:blank?).map { |s|
-            s = visitor.compile(s) unless s.is_a?(String)
-            # remove any ASC/DESC modifiers
-            s.gsub(/\s+(ASC|DESC)\s*?/i, "")
-          }.reject(&:blank?).map.with_index { |column, i|
-            "FIRST_VALUE(#{column}) OVER (PARTITION BY #{columns} ORDER BY #{column}) AS alias_#{i}__"
-          }
+          s = visitor.compile(s) unless s.is_a?(String)
+          # remove any ASC/DESC modifiers
+          s.gsub(/\s+(ASC|DESC)\s*?/i, "")
+        }.reject(&:blank?).map.with_index { |column, i|
+          "FIRST_VALUE(#{column}) OVER (PARTITION BY #{columns} ORDER BY #{column}) AS alias_#{i}__"
+        }
         (order_columns << super).join(", ")
       end
 
-      def temporary_table?(table_name) # :nodoc:
+      def temporary_table?(table_name)
+        # :nodoc:
         select_value_forcing_binds(<<~SQL.squish, "SCHEMA", [bind_string("table_name", table_name.upcase)]) == "Y"
           SELECT
           temporary FROM all_tables WHERE table_name = :table_name and owner = SYS_CONTEXT('userenv', 'current_schema')
@@ -701,6 +712,7 @@ module ActiveRecord
       def max_identifier_length
         supports_longer_identifier? ? 128 : 30
       end
+
       alias table_alias_length max_identifier_length
       alias index_name_length max_identifier_length
 
@@ -737,36 +749,37 @@ module ActiveRecord
         end
 
         private
-          def initialize_type_map(m)
-            super
-            # oracle
-            register_class_with_precision m, %r(WITH TIME ZONE)i,       Type::OracleEnhanced::TimestampTz
-            register_class_with_precision m, %r(WITH LOCAL TIME ZONE)i, Type::OracleEnhanced::TimestampLtz
-            register_class_with_limit m, %r(raw)i,            Type::OracleEnhanced::Raw
-            register_class_with_limit m, %r{^(char)}i,        Type::OracleEnhanced::CharacterString
-            register_class_with_limit m, %r{^(nchar)}i,       Type::OracleEnhanced::String
-            register_class_with_limit m, %r(varchar)i,        Type::OracleEnhanced::String
-            register_class_with_limit m, %r(clob)i,           Type::OracleEnhanced::Text
-            register_class_with_limit m, %r(nclob)i,           Type::OracleEnhanced::NationalCharacterText
 
-            m.register_type "NCHAR", Type::OracleEnhanced::NationalCharacterString.new
-            m.alias_type %r(NVARCHAR2)i,    "NCHAR"
+        def initialize_type_map(m)
+          super
+          # oracle
+          register_class_with_precision m, %r(WITH TIME ZONE)i, Type::OracleEnhanced::TimestampTz
+          register_class_with_precision m, %r(WITH LOCAL TIME ZONE)i, Type::OracleEnhanced::TimestampLtz
+          register_class_with_limit m, %r(raw)i, Type::OracleEnhanced::Raw
+          register_class_with_limit m, %r{^(char)}i, Type::OracleEnhanced::CharacterString
+          register_class_with_limit m, %r{^(nchar)}i, Type::OracleEnhanced::String
+          register_class_with_limit m, %r(varchar)i, Type::OracleEnhanced::String
+          register_class_with_limit m, %r(clob)i, Type::OracleEnhanced::Text
+          register_class_with_limit m, %r(nclob)i, Type::OracleEnhanced::NationalCharacterText
 
-            m.register_type(%r(NUMBER)i) do |sql_type|
-              scale = extract_scale(sql_type)
-              precision = extract_precision(sql_type)
-              limit = extract_limit(sql_type)
-              if scale == 0
-                Type::OracleEnhanced::Integer.new(precision: precision, limit: limit)
-              else
-                Type::Decimal.new(precision: precision, scale: scale)
-              end
-            end
+          m.register_type "NCHAR", Type::OracleEnhanced::NationalCharacterString.new
+          m.alias_type %r(NVARCHAR2)i, "NCHAR"
 
-            if OracleEnhancedAdapter.emulate_booleans
-              m.register_type %r(^NUMBER\(1\))i, Type::Boolean.new
+          m.register_type(%r(NUMBER)i) do |sql_type|
+            scale = extract_scale(sql_type)
+            precision = extract_precision(sql_type)
+            limit = extract_limit(sql_type)
+            if scale == 0
+              Type::OracleEnhanced::Integer.new(precision: precision, limit: limit)
+            else
+              Type::Decimal.new(precision: precision, scale: scale)
             end
           end
+
+          if OracleEnhancedAdapter.emulate_booleans
+            m.register_type %r(^NUMBER\(1\))i, Type::Boolean.new
+          end
+        end
       end
 
       def type_map
@@ -782,7 +795,8 @@ module ActiveRecord
         end
       end
 
-      def extract_limit(sql_type) # :nodoc:
+      def extract_limit(sql_type)
+        # :nodoc:
         case sql_type
         when /^bigint/i
           19
@@ -791,7 +805,8 @@ module ActiveRecord
         end
       end
 
-      def translate_exception(exception, message:, sql:, binds:) # :nodoc:
+      def translate_exception(exception, message:, sql:, binds:)
+        # :nodoc:
         case _connection.error_code(exception)
         when 1
           RecordNotUnique.new(message, sql: sql, binds: binds)
@@ -843,17 +858,21 @@ module ActiveRecord
   autoload :OracleEnhancedProcedures, "active_record/connection_adapters/oracle_enhanced/procedures"
 end
 
-# Workaround for https://github.com/jruby/jruby/issues/6267
-if RUBY_ENGINE == "jruby"
-  require "jruby"
+# https://github.com/rsim/oracle-enhanced/pull/2360/commits/4c476505b76de66a20cc55fbcf325715aca654d9
+# workaround for https://github.com/rsim/oracle-enhanced/pull/2360
+# jruby = 9.4.11.0
+if defined?(JRUBY_VERSION) && Gem::Version.new(JRUBY_VERSION) < Gem::Version.new("9.4.6.0")
+  if RUBY_ENGINE == "jruby"
+    require "jruby"
 
-  class org.jruby::RubyObjectSpace::WeakMap
-    field_reader :map
-  end
+    class org.jruby::RubyObjectSpace::WeakMap
+      field_reader :map
+    end
 
-  class ObjectSpace::WeakMap
-    def values
-      JRuby.ref(self).map.values.reject(&:nil?)
+    class ObjectSpace::WeakMap
+      def values
+        JRuby.ref(self).map.values.reject(&:nil?)
+      end
     end
   end
 end
